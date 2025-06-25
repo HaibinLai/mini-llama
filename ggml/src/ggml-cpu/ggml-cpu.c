@@ -3290,19 +3290,19 @@ int ggml_cpu_has_fma(void) {
 }
 
 int ggml_cpu_has_arm_fma(void) {
-#if defined(__ARM_FEATURE_FMA)
-    return 1;
-#else
+// #if defined(__ARM_FEATURE_FMA)
+//     return 1;
+// #else
     return 0;
-#endif
+// #endif
 }
 
 int ggml_cpu_has_riscv_v(void) {
-#if defined(__riscv_v_intrinsic)
-    return 1;
-#else
+// #if defined(__riscv_v_intrinsic)
+//     return 1;
+// #else
     return 0;
-#endif
+// #endif
 }
 
 int ggml_cpu_has_f16c(void) {
@@ -3354,11 +3354,11 @@ int ggml_cpu_has_ssse3(void) {
 }
 
 int ggml_cpu_has_vsx(void) {
-#if defined(__POWER9_VECTOR__)
-    return 1;
-#else
+// #if defined(__POWER9_VECTOR__)
+//     return 1;
+// #else
     return 0;
-#endif
+// #endif
 }
 
 int ggml_cpu_has_vxe(void) {
@@ -3370,11 +3370,11 @@ int ggml_cpu_has_vxe(void) {
 }
 
 int ggml_cpu_has_neon(void) {
-#if defined(__ARM_ARCH) && defined(__ARM_NEON)
-    return 1;
-#else
+// #if defined(__ARM_ARCH) && defined(__ARM_NEON)
+//     return 1;
+// #else
     return 0;
-#endif
+// #endif
 }
 
 int ggml_cpu_has_dotprod(void) {
@@ -3394,19 +3394,19 @@ int ggml_cpu_has_sve(void) {
 }
 
 int ggml_cpu_has_matmul_int8(void) {
-#if defined(__ARM_ARCH) && defined(__ARM_FEATURE_MATMUL_INT8)
-    return 1;
-#else
+// #if defined(__ARM_ARCH) && defined(__ARM_FEATURE_MATMUL_INT8)
+//     return 1;
+// #else
     return 0;
-#endif
+// #endif
 }
 
 int ggml_cpu_get_sve_cnt(void) {
-#if defined(__ARM_ARCH) && defined(__ARM_FEATURE_SVE)
-    return ggml_arm_arch_features.sve_cnt;
-#else
+// #if defined(__ARM_ARCH) && defined(__ARM_FEATURE_SVE)
+//     return ggml_arm_arch_features.sve_cnt;
+// #else
     return 0;
-#endif
+// #endif
 }
 
 int ggml_cpu_has_sme(void) {
@@ -3462,9 +3462,9 @@ void ggml_cpu_init(void) {
 #endif
         }
 
-#if defined(__ARM_ARCH)
-        ggml_init_arm_arch_features();
-#endif
+// #if defined(__ARM_ARCH)
+//         ggml_init_arm_arch_features();
+// #endif
 
         is_first_call = false;
     }

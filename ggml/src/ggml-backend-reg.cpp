@@ -168,30 +168,30 @@ struct ggml_backend_registry {
 #ifdef GGML_USE_CUDA
         register_backend(ggml_backend_cuda_reg());
 #endif
-#ifdef GGML_USE_METAL
-        register_backend(ggml_backend_metal_reg());
-#endif
-#ifdef GGML_USE_SYCL
-        register_backend(ggml_backend_sycl_reg());
-#endif
-#ifdef GGML_USE_VULKAN
-        register_backend(ggml_backend_vk_reg());
-#endif
-#ifdef GGML_USE_OPENCL
-        register_backend(ggml_backend_opencl_reg());
-#endif
-#ifdef GGML_USE_CANN
-        register_backend(ggml_backend_cann_reg());
-#endif
+// #ifdef GGML_USE_METAL
+//         register_backend(ggml_backend_metal_reg());
+// #endif
+// #ifdef GGML_USE_SYCL
+//         register_backend(ggml_backend_sycl_reg());
+// #endif
+// #ifdef GGML_USE_VULKAN
+//         register_backend(ggml_backend_vk_reg());
+// #endif
+// #ifdef GGML_USE_OPENCL
+//         register_backend(ggml_backend_opencl_reg());
+// #endif
+// #ifdef GGML_USE_CANN
+//         register_backend(ggml_backend_cann_reg());
+// #endif
 #ifdef GGML_USE_BLAS
         register_backend(ggml_backend_blas_reg());
 #endif
 #ifdef GGML_USE_RPC
         register_backend(ggml_backend_rpc_reg());
 #endif
-#ifdef GGML_USE_KOMPUTE
-        register_backend(ggml_backend_kompute_reg());
-#endif
+// #ifdef GGML_USE_KOMPUTE
+//         register_backend(ggml_backend_kompute_reg());
+// #endif
 #ifdef GGML_USE_CPU
         register_backend(ggml_backend_cpu_reg());
 #endif
@@ -413,23 +413,23 @@ void ggml_backend_unload(ggml_backend_reg_t reg) {
 
 static fs::path get_executable_path() {
 #if defined(__APPLE__)
-    // get executable path
-    std::vector<char> path;
-    uint32_t size;
-    while (true) {
-        size = path.size();
-        if (_NSGetExecutablePath(path.data(), &size) == 0) {
-            break;
-        }
-        path.resize(size);
-    }
-    std::string base_path(path.data(), size);
-    // remove executable name
-    auto last_slash = base_path.find_last_of('/');
-    if (last_slash != std::string::npos) {
-        base_path = base_path.substr(0, last_slash);
-    }
-    return base_path + "/";
+    // // get executable path
+    // std::vector<char> path;
+    // uint32_t size;
+    // while (true) {
+    //     size = path.size();
+    //     if (_NSGetExecutablePath(path.data(), &size) == 0) {
+    //         break;
+    //     }
+    //     path.resize(size);
+    // }
+    // std::string base_path(path.data(), size);
+    // // remove executable name
+    // auto last_slash = base_path.find_last_of('/');
+    // if (last_slash != std::string::npos) {
+    //     base_path = base_path.substr(0, last_slash);
+    // }
+    // return base_path + "/";
 #elif defined(__linux__) || defined(__FreeBSD__)
     std::string base_path = ".";
     std::vector<char> path(1024);
@@ -457,18 +457,18 @@ static fs::path get_executable_path() {
 
     return base_path + "/";
 #elif defined(_WIN32)
-    std::vector<wchar_t> path(MAX_PATH);
-    DWORD len = GetModuleFileNameW(NULL, path.data(), path.size());
-    if (len == 0) {
-        return {};
-    }
-    std::wstring base_path(path.data(), len);
-    // remove executable name
-    auto last_slash = base_path.find_last_of('\\');
-    if (last_slash != std::string::npos) {
-        base_path = base_path.substr(0, last_slash);
-    }
-    return base_path + L"\\";
+    // std::vector<wchar_t> path(MAX_PATH);
+    // DWORD len = GetModuleFileNameW(NULL, path.data(), path.size());
+    // if (len == 0) {
+    //     return {};
+    // }
+    // std::wstring base_path(path.data(), len);
+    // // remove executable name
+    // auto last_slash = base_path.find_last_of('\\');
+    // if (last_slash != std::string::npos) {
+    //     base_path = base_path.substr(0, last_slash);
+    // }
+    // return base_path + L"\\";
 #else
     return {};
 #endif
@@ -572,16 +572,16 @@ void ggml_backend_load_all_from_path(const char * dir_path) {
 #endif
 
     ggml_backend_load_best("blas", silent, dir_path);
-    ggml_backend_load_best("cann", silent, dir_path);
+    // ggml_backend_load_best("cann", silent, dir_path);
     ggml_backend_load_best("cuda", silent, dir_path);
-    ggml_backend_load_best("hip", silent, dir_path);
-    ggml_backend_load_best("kompute", silent, dir_path);
-    ggml_backend_load_best("metal", silent, dir_path);
+    // ggml_backend_load_best("hip", silent, dir_path);
+    // ggml_backend_load_best("kompute", silent, dir_path);
+    // ggml_backend_load_best("metal", silent, dir_path);
     ggml_backend_load_best("rpc", silent, dir_path);
-    ggml_backend_load_best("sycl", silent, dir_path);
-    ggml_backend_load_best("vulkan", silent, dir_path);
-    ggml_backend_load_best("opencl", silent, dir_path);
-    ggml_backend_load_best("musa", silent, dir_path);
+    // ggml_backend_load_best("sycl", silent, dir_path);
+    // ggml_backend_load_best("vulkan", silent, dir_path);
+    // ggml_backend_load_best("opencl", silent, dir_path);
+    // ggml_backend_load_best("musa", silent, dir_path);
     ggml_backend_load_best("cpu", silent, dir_path);
     // check the environment variable GGML_BACKEND_PATH to load an out-of-tree backend
     const char * backend_path = std::getenv("GGML_BACKEND_PATH");
