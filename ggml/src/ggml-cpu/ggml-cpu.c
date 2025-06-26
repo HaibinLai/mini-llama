@@ -2599,6 +2599,12 @@ void ggml_threadpool_resume(struct ggml_threadpool * threadpool) {
 #endif
 }
 
+// ggml_graph_plan 函数生成一个 ggml_cplan 结构，用于根据给定的计算图 (ggml_cgraph)、线程数 (n_threads) 和线程池 (ggml_threadpool) 来规划计算任务。
+// 它通过分析计算图中的节点操作类型，估算工作缓冲区大小和任务分配，最终返回包含线程池、线程数和工作区信息的计划。
+// 估算出任务总量（如最多需要多少并行 task）
+// 估算出工作缓冲区大小（work_size）
+// 决定使用多少线程参与执行（cplan.n_threads）
+// ggml_graph_plan() 是 GGML 中的 执行前分析阶段，它只做了静态资源估算和计划决策，而不做真正的任务调度。
 struct ggml_cplan ggml_graph_plan(
           const struct ggml_cgraph * cgraph,
                                int   n_threads,

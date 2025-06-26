@@ -1452,6 +1452,13 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
     return GGML_STATUS_SUCCESS;
 }
 
+// ggml_backend_sched_new 函数用于创建并初始化一个新的 ggml_backend_sched_t 调度器对象。
+// 该函数接受多个后端、缓冲区类型、图大小、并行性和操作卸载等参数，分配必要的内存资源，并设置调度器的初始状态以支持后续的计算图调度操作。
+// 它 没有直接分配线程或分配线程具体任务，但它：
+// 为支持多线程并发（parallel）运行多个计算图副本（copies）做好了资源准备；
+// 为每个后端设置好了默认 buffer 类型和事件机制（用于异步同步）；
+// 分配了与“调度图”、“拆分节点”、“tensor 复制”、“hash 表”相关的大块内存；
+// 为后续图调度器调用 ggml_backend_sched_graph_compute() 提供所有必需的上下文。
 ggml_backend_sched_t ggml_backend_sched_new(
         ggml_backend_t * backends,
         ggml_backend_buffer_type_t * bufts,
@@ -1463,6 +1470,7 @@ ggml_backend_sched_t ggml_backend_sched_new(
     GGML_ASSERT(n_backends <= GGML_SCHED_MAX_BACKENDS);
     GGML_ASSERT(ggml_backend_dev_type(ggml_backend_get_device(backends[n_backends - 1])) == GGML_BACKEND_DEVICE_TYPE_CPU);
 
+    // 创建调度器结构体并设置核心参数
     struct ggml_backend_sched * sched = (ggml_backend_sched *) calloc(1, sizeof(struct ggml_backend_sched));
 
     const char * GGML_SCHED_DEBUG = getenv("GGML_SCHED_DEBUG");
