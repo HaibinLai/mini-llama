@@ -6,6 +6,8 @@
 #include "unary-ops.h"
 #include "vec.h"
 
+#include <taskflow/taskflow.hpp>
+
 #include <float.h>
 
 // ggml_compute_forward_dup
@@ -3265,6 +3267,13 @@ void ggml_compute_forward_norm(
     }
 }
 
+#include <x86intrin.h>
+
+static inline uint64_t rdtscp() {
+    unsigned int aux;
+    return __rdtscp(&aux);  // 序列化读取 TSC
+}
+
 // ggml_compute_forward_group_rms_norm
 
 static void ggml_compute_forward_rms_norm_f32(
@@ -3286,6 +3295,11 @@ static void ggml_compute_forward_rms_norm_f32(
     memcpy(&eps, dst->op_params, sizeof(float));
 
     GGML_ASSERT(eps >= 0.0f);
+
+        // uint64_t start = rdtscp();
+
+
+
 
     // TODO: optimize
     for (int64_t i03 = 0; i03 < ne03; i03++) {
@@ -3313,7 +3327,214 @@ static void ggml_compute_forward_rms_norm_f32(
             }
         }
     }
+
+    
+    // uint64_t end = rdtscp();
+    // // std::cout << "Taskflow execution took " << (end - start) << " cycles\n";
+    // double seconds = (end - start) / 3e9;
+    // std::cout << "Taskflow took " << seconds * 1e6 << " us\n";
 }
+
+
+void parallel_rmsnorm_taskflow(
+    tf::Taskflow& taskflow,
+    int64_t ne00,
+    size_t nb01, size_t nb02, size_t nb03,
+    size_t nb1,  size_t nb2,  size_t nb3,
+    float eps,
+     const ggml_tensor* src0,  // ✅ 改为 const
+    ggml_tensor* dst,
+    int64_t i01,
+    int64_t i02,
+    int64_t i03
+) {
+    const int64_t chunk_size = 256;
+    const int64_t num_chunks = (ne00 + chunk_size - 1) / chunk_size;
+
+    auto partial_sums = std::make_shared<std::vector<ggml_float>>(num_chunks, 0.0f);
+    auto ready_chunks = std::make_shared<std::atomic<int>>(0);
+    auto scale_ptr    = std::make_shared<float>(0.0f);
+
+    const int64_t ti01 = i01, ti02 = i02, ti03 = i03;
+
+    float* x = (float*)((char*)src0->data + ti01*nb01 + ti02*nb02 + ti03*nb03);
+    float* y = (float*)((char*)dst->data + ti01*nb1  + ti02*nb2  + ti03*nb3 );
+
+    // Step 1: partial sums
+    for (int i = 0; i < num_chunks; ++i) {
+        taskflow.emplace([=]() {
+            int64_t start = i * chunk_size;
+            int64_t end = std::min(start + chunk_size, ne00);
+            ggml_float sum = 0.0f;
+            for (int64_t j = start; j < end; ++j) {
+                sum += (ggml_float)(x[j] * x[j]);
+            }
+            (*partial_sums)[i] = sum;
+            ready_chunks->fetch_add(1, std::memory_order_relaxed);
+        });
+    }
+
+    // Step 2: compute mean, scale, and memcpy
+    auto compute_scale = taskflow.emplace([=]() {
+        while (ready_chunks->load(std::memory_order_relaxed) < num_chunks);
+
+        ggml_float total = 0.0;
+        for (auto s : *partial_sums) total += s;
+
+        float mean = total / ne00;
+        *scale_ptr = 1.0f / std::sqrt(mean + eps);
+
+        std::memcpy(y, x, ne00 * sizeof(float));
+    });
+
+    // Step 3: apply scale
+    for (int i = 0; i < num_chunks; ++i) {
+        auto apply_scale = taskflow.emplace([=]() {
+            int64_t start = i * chunk_size;
+            int64_t end = std::min(start + chunk_size, ne00);
+            for (int64_t j = start; j < end; ++j) {
+                y[j] *= *scale_ptr;
+            }
+        });
+        apply_scale.succeed(compute_scale);
+    }
+}
+
+
+static void ggml_compute_forward_rms_norm_f32_task(
+        const ggml_compute_params * params,
+        ggml_tensor * dst) {
+
+    const ggml_tensor * src0 = dst->src[0];
+
+    GGML_ASSERT(ggml_are_same_shape(src0, dst));
+
+    GGML_ASSERT(src0->nb[0] == sizeof(float));
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    GGML_TENSOR_UNARY_OP_LOCALS
+
+    float eps;
+    memcpy(&eps, dst->op_params, sizeof(float));
+
+    GGML_ASSERT(eps >= 0.0f);
+
+
+    // for (int64_t i03 = 0; i03 < ne03; i03++) {
+    //     for (int64_t i02 = 0; i02 < ne02; i02++) {
+    //         for (int64_t i01 = 0; i01 < ne01; i01 += 1) {
+    //             const float * x = (float *) ((char *) src0->data + i01*nb01 + i02*nb02 + i03*nb03);
+
+    //             ggml_float sum = 0.0;
+    //             // 8192次
+    //             for (int64_t i00 = 0; i00 < ne00; i00++) {
+    //                 sum += (ggml_float)(x[i00] * x[i00]);
+    //             }
+
+    //             const float mean = sum/ne00;
+
+    //             float * y = (float *) ((char *) dst->data + i01*nb1 + i02*nb2 + i03*nb3);
+
+    //             memcpy(y, x, ne00 * sizeof(float));
+
+    //             const float scale = 1.0f/sqrtf(mean + eps);
+
+    //             // 8192 次
+    //             for (int i = 0; i < ne00; ++i) {
+    //                 y[i] *= scale;
+    //             }
+    //         }
+    //     }
+    // }
+
+
+
+    std::cout << ne00 << " " << ne01 << " " << ne02 << " " << ne03 << "\n";
+    int int_ne00 = ne00;
+    int int_ne01 = ne01;
+    int int_ne02 = ne02;
+    int int_ne03 = ne03;
+    
+    int group_size = 1;
+
+    float check1 = 0;
+
+    
+    // int i01 = 1;
+    // int i02 = 1;
+    // int i03 = 1;
+
+    tf::Taskflow taskflow;
+    tf::Executor executor(nth);
+
+    for (int i03 = 0; i03 < int_ne03; ++i03) {
+        for (int i02 = 0; i02 < int_ne02; ++i02) {
+            for (int i01 = 0; i01 < int_ne01; i01 += group_size) {
+                taskflow.emplace([=]() {
+                    int i01_end = std::min(i01 + group_size, int_ne01);
+
+                    for (int ii01 = i01; ii01 < i01_end; ++ii01) {
+                        const float * x = (float *) ((char *) src0->data + ii01*nb01 + i02*nb02 + i03*nb03);
+
+                        ggml_float sum = 0.0;
+                        for (int i00 = 0; i00 < int_ne00; i00++) {
+                            sum += (ggml_float)(x[i00] * x[i00]);
+                        }
+
+                        const float mean = sum / int_ne00;
+                        // check1 = mean;
+                        // std::cout << "mean: " << mean << "\n";
+
+                        float * y = (float *) ((char *) dst->data + ii01*nb1 + i02*nb2 + i03*nb3);
+
+                        memcpy(y, x, int_ne00 * sizeof(float));
+
+                        const float scale = 1.0f / sqrtf(mean + eps);
+
+                        // ggml_vec_scale_f32(int_ne00, y, scale);
+                        for (int i = 0; i < int_ne00; ++i) {
+                            y[i] *= scale;
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+
+    // 差
+// for (int64_t i03 = 0; i03 < ne03; i03++) {
+//     for (int64_t i02 = 0; i02 < ne02; i02++) {
+//         for (int64_t i01 = 0; i01 < ne01; i01++) {
+//             parallel_rmsnorm_taskflow(
+//                 taskflow, ne00,
+//                 nb01, nb02, nb03,
+//                 nb1, nb2, nb3,
+//                 eps,
+//                 src0, dst,
+//                 i01, i02, i03
+//             );
+//         }
+//     }
+// }
+
+    auto future = executor.run(taskflow);
+    uint64_t start = rdtscp();
+
+    future.wait();  // 等待完成
+
+    uint64_t end = rdtscp();
+    // std::cout << "Taskflow execution took " << (end - start) << " cycles\n";
+    double seconds = (end - start) / 3e9 * 1e6 ;
+    std::cout << "Taskflow took " << seconds << " us\n";
+
+    std::cout << "check1: " << check1 << "\n";
+
+}
+
+/////////////////  RMSNorm END ////////////////////
 
 void ggml_compute_forward_rms_norm(
         const ggml_compute_params * params,
@@ -3324,7 +3545,8 @@ void ggml_compute_forward_rms_norm(
     switch (src0->type) {
         case GGML_TYPE_F32:
             {
-                ggml_compute_forward_rms_norm_f32(params, dst);
+                // ggml_compute_forward_rms_norm_f32(params, dst);
+                ggml_compute_forward_rms_norm_f32_task(params, dst);
             } break;
         default:
             {
@@ -4226,6 +4448,7 @@ void ggml_compute_forward_permute(
 void ggml_compute_forward_transpose(
         const ggml_compute_params * params,
         ggml_tensor * dst) {
+    // printf("|||\n");
     // NOP
     GGML_UNUSED(params);
     GGML_UNUSED(dst);
@@ -5545,6 +5768,7 @@ static void ggml_compute_forward_rope_f16(
     }
 }
 
+// use!
 void ggml_compute_forward_rope(
         const ggml_compute_params * params,
         ggml_tensor * dst) {
