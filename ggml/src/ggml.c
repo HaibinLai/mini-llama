@@ -3174,6 +3174,8 @@ struct ggml_tensor * ggml_permute(
     struct ggml_tensor * result = ggml_view_tensor(ctx, a);
     ggml_format_name(result, "%s (permuted)", a->name);
 
+    // GGML 的张量系统通过 nb[]（stride，单位为 byte）控制张量遍历顺序。
+
     int ne[GGML_MAX_DIMS];
     int nb[GGML_MAX_DIMS];
 
@@ -5693,6 +5695,10 @@ static void ggml_compute_backward(
     // GGML_ASSERT(!src2_needs_grads || ggml_are_same_shape(src2, cgraph->grads[isrc2]));
 }
 
+
+// ggml_visit_parents 是一个静态函数，用于递归遍历计算图（ggml_cgraph）中某
+// 个张量节点（ggml_tensor）的所有父节点。它通过检查节点是否已访问来避免重复处理，
+// 并根据节点的操作类型将其分类为叶节点或普通节点，同时更新计算图的节点和叶节点列表。
 static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor * node) {
     // check if already visited
     if (ggml_hash_insert(&cgraph->visited_hash_set, node) == GGML_HASHSET_ALREADY_EXISTS) {
@@ -5731,6 +5737,8 @@ static void ggml_visit_parents(struct ggml_cgraph * cgraph, struct ggml_tensor *
     }
 }
 
+// 用于构建前向计算图。它通过访问张量的父节点来更新计算图，
+// 并在扩展模式下验证最后添加的节点是否为起始点。
 static void ggml_build_forward_impl(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor, bool expand) {
     if (!expand) {
         // TODO: this branch isn't accessible anymore, maybe move this to ggml_build_forward_expand

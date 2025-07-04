@@ -245,9 +245,9 @@ void ggml_vec_silu_f32(const int n, float * y, const float * x) {
         _mm_storeu_ps(y + i, ggml_v_silu(_mm_loadu_ps(x + i)));
     }
 #elif defined(__ARM_NEON) && defined(__aarch64__)
-    for (; i + 3 < n; i += 4) {
-        vst1q_f32(y + i, ggml_v_silu(vld1q_f32(x + i)));
-    }
+    // for (; i + 3 < n; i += 4) {
+    //     vst1q_f32(y + i, ggml_v_silu(vld1q_f32(x + i)));
+    // }
 #endif
     for (; i < n; ++i) {
         y[i] = ggml_silu_f32(x[i]);

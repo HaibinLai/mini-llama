@@ -136,21 +136,7 @@ static void apply_task_binary_op(const ggml_compute_params * params, ggml_tensor
         GGML_ASSERT(ggml_are_same_shape(src0, src1));
     }
 
-#ifdef GGML_USE_ACCELERATE
-    vDSP_fn_t vDSP_op = nullptr;
-    // TODO - avoid the f32-only check using type 'trait' lookup tables and row-based src-to-float conversion functions
-    if (src0->type == GGML_TYPE_F32 && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
-        if (op == op_add) {
-            vDSP_op = vDSP_vadd;
-        } else if (op == op_sub) {
-            vDSP_op = vDSP_vsub;
-        } else if (op == op_mul) {
-            vDSP_op = vDSP_vmul;
-        } else if (op == op_div) {
-            vDSP_op = vDSP_vdiv;
-        }
-    }
-#endif
+
 
     for (int64_t ir = ir0; ir < ir1; ++ir) {
         const int64_t i03 = ir/(ne02*ne01);
@@ -170,14 +156,6 @@ static void apply_task_binary_op(const ggml_compute_params * params, ggml_tensor
             const int64_t nr0 = ne00 / ne10;
 
             for (int64_t r = 0; r < nr0; ++r) {
-#ifdef GGML_USE_ACCELERATE
-                if constexpr (std::is_same_v<src0_t, float> && std::is_same_v<src1_t, float> && std::is_same_v<dst_t, float>) {
-                    if (vDSP_op != nullptr) {
-                        vDSP_op(src1_ptr, 1, src0_ptr + r*ne10, 1, dst_ptr + r*ne10, 1, ne10);
-                        continue;
-                    }
-                }
-#endif
                 vec_binary_op_contiguous<op>(ne10, dst_ptr + r*ne10, src0_ptr + r*ne10, src1_ptr);
             }
         } else {

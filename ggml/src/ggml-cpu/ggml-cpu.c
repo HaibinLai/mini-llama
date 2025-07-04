@@ -1659,6 +1659,13 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
 
     if(params->ith == 0){
         printf("ggml_compute_forward: %s\n", tensor->name ? tensor->name : "unnamed");
+        // print tensor info
+        printf("  op = %s, type = %s, ne = [%lld, %lld, %lld, %lld], nb = [%lld, %lld, %lld, %lld]\n",
+               ggml_op_name(tensor->op),
+               ggml_type_name(tensor->type),
+               tensor->ne[0], tensor->ne[1], tensor->ne[2],
+               tensor->ne[3],
+               tensor->nb[0], tensor->nb[1], tensor->nb[2], tensor->nb[3]);
     }
     
     switch (tensor->op) {
@@ -1725,19 +1732,19 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             } break;
         case GGML_OP_ARGMAX:
             {
-                ggml_compute_forward_argmax(params, tensor);
+                // ggml_compute_forward_argmax(params, tensor);
             } break;
         case GGML_OP_COUNT_EQUAL:
             {
-                ggml_compute_forward_count_equal(params, tensor);
+                // ggml_compute_forward_count_equal(params, tensor);
             } break;
         case GGML_OP_REPEAT:
             {
-                ggml_compute_forward_repeat(params, tensor);
+                // ggml_compute_forward_repeat(params, tensor);
             } break;
         case GGML_OP_REPEAT_BACK:
             {
-                ggml_compute_forward_repeat_back(params, tensor);
+                // ggml_compute_forward_repeat_back(params, tensor);
             } break;
         case GGML_OP_CONCAT:
             {
@@ -1745,7 +1752,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
             } break;
         case GGML_OP_SILU_BACK:
             {
-                ggml_compute_forward_silu_back(params, tensor);
+                // ggml_compute_forward_silu_back(params, tensor);
             } break;
         case GGML_OP_NORM:
             {
@@ -1796,11 +1803,12 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 ggml_compute_forward_cont(params, tensor);
             } break;
         case GGML_OP_RESHAPE:
-            {
+            { // NOP
                 ggml_compute_forward_reshape(params, tensor);
             } break;
         case GGML_OP_VIEW:
             {
+                // NO OP, just a view; used in back propagation
                 ggml_compute_forward_view(params, tensor);
             } break;
         case GGML_OP_PERMUTE:
@@ -2012,6 +2020,106 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
     }
 }
 
+
+static void ggml_compute_haibin_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor) {
+    // GGML_ASSERT(params);
+
+    if (tensor->op == GGML_OP_NONE || ggml_is_empty(tensor)) {
+        return;
+    }
+
+    // extra_buffer op?
+    if (ggml_cpu_extra_compute_forward(params, tensor)) {
+        return;
+    }
+
+    if(params->ith == 0){
+        printf("ggml_compute_forward: %s\n", tensor->name ? tensor->name : "unnamed");
+        // print tensor info
+        printf("  op = %s, type = %s, ne = [%lld, %lld, %lld, %lld], nb = [%lld, %lld, %lld, %lld]\n",
+               ggml_op_name(tensor->op),
+               ggml_type_name(tensor->type),
+               tensor->ne[0], tensor->ne[1], tensor->ne[2],
+               tensor->ne[3],
+               tensor->nb[0], tensor->nb[1], tensor->nb[2], tensor->nb[3]);
+    }
+    
+    switch (tensor->op) {
+        case GGML_OP_ADD:
+            {
+                ggml_compute_forward_add(params, tensor);
+            } break;
+        case GGML_OP_MUL:
+            {
+                ggml_compute_forward_mul(params, tensor); // single thread
+            } break;
+        case GGML_OP_RMS_NORM:
+            { // modif
+                ggml_compute_forward_rms_norm(params, tensor);
+            } break;
+        case GGML_OP_MUL_MAT:
+            {
+                ggml_compute_forward_mul_mat(params, tensor);
+            } break;
+        case GGML_OP_CPY:
+            { 
+                ggml_compute_forward_cpy(params, tensor);
+            } break;
+        case GGML_OP_CONT:
+            { 
+                ggml_compute_forward_cont(params, tensor);
+            } break;
+        case GGML_OP_RESHAPE:
+            { // NOP
+                // ggml_compute_forward_reshape(params, tensor);
+            } break;
+        case GGML_OP_VIEW:
+            {
+                // NO OP, just a view; used in back propagation
+                // ggml_compute_forward_view(params, tensor);
+            } break;
+        case GGML_OP_PERMUTE:
+            { // NOP
+                // ggml_compute_forward_permute(params, tensor);
+            } break;
+        case GGML_OP_TRANSPOSE:
+            { // NOP
+                // ggml_compute_forward_transpose(params, tensor);
+            } break;
+        case GGML_OP_GET_ROWS:
+            {
+                ggml_compute_forward_get_rows(params, tensor);
+            } break;
+        case GGML_OP_SOFT_MAX:
+            {
+                ggml_compute_forward_soft_max(params, tensor);
+            } break;
+        case GGML_OP_ROPE:
+            {// use!
+                ggml_compute_forward_rope(params, tensor);
+            } break;
+
+        case GGML_OP_UNARY:
+            {
+                ggml_compute_forward_unary(params, tensor);
+            } break;
+
+        case GGML_OP_NONE:
+            {
+                // nop
+            } break;
+        case GGML_OP_COUNT:
+            {
+                GGML_ABORT("fatal error");
+            }
+        default:
+            {
+                fprintf(stderr, "ggml_compute_haibin_forward: unsupported op %s\n", ggml_op_name(tensor->op));
+                GGML_ABORT("fatal error");
+            }
+    }
+}
+
 // Android's libc implementation "bionic" does not support setting affinity
 #if defined(__gnu_linux__)
 static void set_numa_thread_affinity(int thread_n) {
@@ -2181,7 +2289,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_SCALE:
         case GGML_OP_SET:
         case GGML_OP_RESHAPE:
-        case GGML_OP_VIEW:
+        case GGML_OP_VIEW: // 这东西在反向传播时才会使用
         case GGML_OP_PERMUTE:
         case GGML_OP_TRANSPOSE:
         case GGML_OP_GET_ROWS_BACK:
@@ -3099,7 +3207,8 @@ static void ggml_graph_compute_with_omp(struct ggml_threadpool * threadpool, int
                     if(state->ith ==0){
                         start = rdtscp();
                     }
-                    ggml_compute_forward(&params, node);
+                    // ggml_compute_forward(&params, node);
+                    ggml_compute_haibin_forward(&params, node);
 
                 }
 
@@ -3222,8 +3331,8 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
 
 #ifdef GGML_USE_OPENMP
     if (n_threads > 1) {
-        // ggml_graph_compute_with_omp(threadpool, n_threads);
-        ggml_graph_compute_with_task(threadpool, n_threads);
+        ggml_graph_compute_with_omp(threadpool, n_threads);
+        // ggml_graph_compute_with_task(threadpool, n_threads);
 
 
         // #pragma omp parallel num_threads(n_threads)
