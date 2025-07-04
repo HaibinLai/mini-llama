@@ -2,7 +2,10 @@
 
 #include "ggml.h"
 
+// #include <taskflow/taskflow.hpp>
+
 // 这个byd层就是来记录算子的
+
 
 
 //
@@ -27,6 +30,9 @@ static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 extern "C" {
 #endif
 
+
+
+
 void ggml_compute_forward_dup(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_add(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_add1(const struct ggml_compute_params * params, struct ggml_tensor * dst);
@@ -42,6 +48,7 @@ void ggml_compute_forward_concat(const struct ggml_compute_params * params, stru
 void ggml_compute_forward_silu_back(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_norm(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_rms_norm(const struct ggml_compute_params * params, struct ggml_tensor * dst);
+// void ggml_compute_task2_forward_rms_norm(const ggml_compute_params * params, ggml_tensor * dst);
 void ggml_compute_forward_rms_norm_back(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_group_norm(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_l2_norm(const struct ggml_compute_params * params, struct ggml_tensor * dst);
@@ -54,7 +61,12 @@ void ggml_compute_forward_reshape(const struct ggml_compute_params * params, str
 void ggml_compute_forward_view(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_permute(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_transpose(const struct ggml_compute_params * params, struct ggml_tensor * dst);
+
+void ggml_compute_task_forward_get_rows(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_get_rows(const struct ggml_compute_params * params, struct ggml_tensor * dst);
+
+void ggml_compute_task_forward_dup(const struct ggml_compute_params * params, struct ggml_tensor * dst);
+
 void ggml_compute_forward_get_rows_back(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_diag(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_diag_mask_inf(const struct ggml_compute_params * params, struct ggml_tensor * dst);
@@ -108,6 +120,11 @@ void ggml_compute_forward_custom(const struct ggml_compute_params * params, stru
 void ggml_compute_forward_cross_entropy_loss(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_cross_entropy_loss_back(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_opt_step_adamw(const struct ggml_compute_params * params, struct ggml_tensor * dst);
+
+void ggml_compute_task2_forward_mul_mat(
+        const struct ggml_compute_params * params,
+              struct ggml_tensor * dst);
+
 
 #ifdef __cplusplus
 }

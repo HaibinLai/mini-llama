@@ -1068,60 +1068,56 @@ ggml_tensor * llm_graph_context::build_attn_mha(
 
     // TODO: replace hardcoded padding with ggml-provided padding
     if (cparams.flash_attn && (n_kv % 256 == 0) && kq_b == nullptr) {
-        GGML_ASSERT(kq_b == nullptr && "Flash attention does not support KQ bias yet");
+        // printf("Using flash attention\n");
+        // GGML_ASSERT(kq_b == nullptr && "Flash attention does not support KQ bias yet");
 
-        if (v_trans) {
-            v = ggml_transpose(ctx0, v);
-        }
+        // if (v_trans) {
+        //     v = ggml_transpose(ctx0, v);
+        // }
 
-        // this can happen when KV cache is not used (e.g. an embedding model with non-causal attn)
-        if (k->type == GGML_TYPE_F32) {
-            k = ggml_cast(ctx0, k, GGML_TYPE_F16);
-        }
+        // // this can happen when KV cache is not used (e.g. an embedding model with non-causal attn)
+        // if (k->type == GGML_TYPE_F32) {
+        //     k = ggml_cast(ctx0, k, GGML_TYPE_F16);
+        // }
 
-        if (v->type == GGML_TYPE_F32) {
-            v = ggml_cast(ctx0, v, GGML_TYPE_F16);
-        }
+        // if (v->type == GGML_TYPE_F32) {
+        //     v = ggml_cast(ctx0, v, GGML_TYPE_F16);
+        // }
 
-        cur = ggml_flash_attn_ext(ctx0, q, k, v, kq_mask, kq_scale, hparams.f_max_alibi_bias,
-                                  hparams.attn_soft_cap ? hparams.f_attn_logit_softcapping : 0.0f);
+        // cur = ggml_flash_attn_ext(ctx0, q, k, v, kq_mask, kq_scale, hparams.f_max_alibi_bias,
+        //                           hparams.attn_soft_cap ? hparams.f_attn_logit_softcapping : 0.0f);
 
-        ggml_flash_attn_ext_set_prec(cur, GGML_PREC_F32);
+        // ggml_flash_attn_ext_set_prec(cur, GGML_PREC_F32);
 
-        if (v_mla) {
-#if 0
-            // v_mla can be applied as a matrix-vector multiplication with broadcasting across dimension 3 == n_tokens.
-            // However, the code is optimized for dimensions 0 and 1 being large, so this is ineffient.
-            cur = ggml_reshape_4d(ctx0, cur, v_mla->ne[0], 1, n_head, n_tokens);
-            cur = ggml_mul_mat(ctx0, v_mla, cur);
-#else
-            // It's preferable to do the calculation as a matrix-matrix multiplication with n_tokens in dimension 1.
-            // The permutations are noops and only change how the tensor data is interpreted.
-            cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
-            cur = ggml_mul_mat(ctx0, v_mla, cur);
-            cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
-            cur = ggml_cont(ctx0, cur); // Needed because ggml_reshape_2d expects contiguous inputs.
-#endif
-        }
+        // if (v_mla) {
+        //     printf("Using MLA with absorption optimization in flash attention\n");
+        //     // It's preferable to do the calculation as a matrix-matrix multiplication with n_tokens in dimension 1.
+        //     // The permutations are noops and only change how the tensor data is interpreted.
+        //     cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
+        //     cur = ggml_mul_mat(ctx0, v_mla, cur);
+        //     cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
+        //     cur = ggml_cont(ctx0, cur); // Needed because ggml_reshape_2d expects contiguous inputs.
+        // }
 
-        cur = ggml_reshape_2d(ctx0, cur, cur->ne[0]*n_head, n_tokens);
+        // cur = ggml_reshape_2d(ctx0, cur, cur->ne[0]*n_head, n_tokens);
     } else {
+        printf("Using standard attention\n");
         ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
 
         // note: this op tends to require high floating point range
         //       while for some models F16 is enough, for others it is not, so we default to F32 here
         ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
 
-        if (arch == LLM_ARCH_GROK) {
-            // need to do the following:
-            // multiply by attn_output_multiplyer of 0.08838834764831845
-            // and then :
-            // kq = 30 * tanh(kq / 30)
-            // before the softmax below
+        // if (arch == LLM_ARCH_GROK) {
+        //     // need to do the following:
+        //     // multiply by attn_output_multiplyer of 0.08838834764831845
+        //     // and then :
+        //     // kq = 30 * tanh(kq / 30)
+        //     // before the softmax below
 
-            kq = ggml_tanh(ctx0, ggml_scale(ctx0, kq, 0.08838834764831845f/30.0f));
-            kq = ggml_scale(ctx0, kq, 30);
-        }
+        //     kq = ggml_tanh(ctx0, ggml_scale(ctx0, kq, 0.08838834764831845f/30.0f));
+        //     kq = ggml_scale(ctx0, kq, 30);
+        // }
 
         if (hparams.attn_soft_cap) {
             kq = ggml_scale(ctx0, kq, 1.0f / hparams.f_attn_logit_softcapping);
