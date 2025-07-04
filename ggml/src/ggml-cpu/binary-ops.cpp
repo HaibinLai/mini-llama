@@ -6,6 +6,11 @@
 using vDSP_fn_t = void (*)(const float *, vDSP_Stride, const float *, vDSP_Stride, float *, vDSP_Stride, vDSP_Length);
 #endif
 
+
+
+
+#include <taskflow/taskflow.hpp>
+
 static inline float op_add(float a, float b) {
     return a + b;
 }
@@ -117,8 +122,110 @@ static void apply_binary_op(const ggml_compute_params * params, ggml_tensor * ds
     }
 }
 
+
+
+
+
+// // apply_binary_op 是一个静态模板函数，用于在两个张量 (src0 和 src1) 上应用二元操作，并将结果存储到目标张量 (dst) 中。该函数支持广播和多线程处理，并在特定条件下利用加速库（如 vDSP）优化浮点运算。
+// template <float (*op)(float, float), typename src0_t, typename src1_t, typename dst_t>
+// static void apply_task_binary_op(const ggml_compute_params * params, ggml_tensor * dst) {
+//     const ggml_tensor * src0 = dst->src[0];
+//     const ggml_tensor * src1 = dst->src[1];
+
+//     GGML_ASSERT(ggml_can_repeat(src1, src0) && ggml_are_same_shape(src0, dst));
+
+//     GGML_TENSOR_BINARY_OP_LOCALS
+
+//     GGML_ASSERT( nb0 == sizeof(dst_t));
+//     GGML_ASSERT(nb00 == sizeof(src0_t));
+
+//     const auto [ir0, ir1] = get_thread_range(params, src0);
+//     const bool is_src1_contiguous = (nb10 == sizeof(src1_t));
+
+//     if (!is_src1_contiguous) { // broadcast not implemented yet for non-contiguous
+//         GGML_ASSERT(ggml_are_same_shape(src0, src1));
+//     }
+
+//     for (int64_t ir = ir0; ir < ir1; ++ir) {
+//         const int64_t i03 = ir/(ne02*ne01);
+//         const int64_t i02 = (ir - i03*ne02*ne01)/ne01;
+//         const int64_t i01 = (ir - i03*ne02*ne01 - i02*ne01);
+
+//         const int64_t i13 = i03 % ne13;
+//         const int64_t i12 = i02 % ne12;
+//         const int64_t i11 = i01 % ne11;
+
+//         dst_t        * dst_ptr  = (dst_t  *)       ((char *)       dst->data  + i03*nb3  + i02*nb2  + i01*nb1 );
+//         const src0_t * src0_ptr = (const src0_t *) ((const char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01);
+//         const src1_t * src1_ptr = (const src1_t *) ((const char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11);
+        
+//         //  print is_src1_contiguous
+//         printf("is_src1_contiguous: %d, ne00: %lld, ne10: %lld, nb10: %lld\n", is_src1_contiguous, ne00, ne10, nb10);
+//             // src1 is broadcastable across src0 and dst in i1, i2, i3
+//         printf("apply_task_binary_op: ne00 = %lld, ne10 = %lld, nb10 = %lld\n", ne00, ne10, nb10);
+//         const int64_t nr0 = ne00 / ne10;
+
+//         for (int64_t r = 0; r < nr0; ++r) {
+//             vec_binary_op_contiguous<op>(ne10, dst_ptr + r*ne10, src0_ptr + r*ne10, src1_ptr);
+//         }
+
+//     }
+// }
+
 template <float (*op)(float, float), typename src0_t, typename src1_t, typename dst_t>
 static void apply_task_binary_op(const ggml_compute_params * params, ggml_tensor * dst) {
+    const ggml_tensor * src0 = dst->src[0];
+    const ggml_tensor * src1 = dst->src[1];
+
+    GGML_ASSERT(ggml_can_repeat(src1, src0) && ggml_are_same_shape(src0, dst));
+    GGML_TENSOR_BINARY_OP_LOCALS
+
+    GGML_ASSERT(nb0 == sizeof(dst_t));
+    GGML_ASSERT(nb00 == sizeof(src0_t));
+
+    const auto [ir0, ir1] = get_thread_range(params, src0);
+    const bool is_src1_contiguous = (nb10 == sizeof(src1_t));
+
+    if (!is_src1_contiguous) {
+        GGML_ASSERT(ggml_are_same_shape(src0, src1));
+    }
+
+    tf::Taskflow tf;
+    tf::Executor exec;
+
+    printf("XXXXapply_task_binary_op: ne00 = %lld, ne10 = %lld, nb10 = %lld\n", ne00, ne10, nb10);
+
+    for (int64_t ir = ir0; ir < ir1; ++ir) {
+        tf.emplace([=]() {
+            const int64_t i03 = ir / (ne02 * ne01);
+            const int64_t i02 = (ir - i03 * ne02 * ne01) / ne01;
+            const int64_t i01 = (ir - i03 * ne02 * ne01 - i02 * ne01);
+
+            const int64_t i13 = i03 % ne13;
+            const int64_t i12 = i02 % ne12;
+            const int64_t i11 = i01 % ne11;
+
+            dst_t       * dst_ptr  = (dst_t *)       ((char *) dst->data  + i03*nb3  + i02*nb2  + i01*nb1 );
+            const src0_t* src0_ptr = (const src0_t *)((const char *) src0->data + i03*nb03 + i02*nb02 + i01*nb01);
+            const src1_t* src1_ptr = (const src1_t *)((const char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11);
+
+            const int64_t nr0 = ne00 / ne10;
+
+            for (int64_t r = 0; r < nr0; ++r) {
+                vec_binary_op_contiguous<op>(ne10, dst_ptr + r*ne10, src0_ptr + r*ne10, src1_ptr);
+            }
+        });
+    }
+
+    exec.run(tf).wait();
+}
+
+
+
+
+
+template <float (*op)(float, float), typename src0_t, typename src1_t, typename dst_t>
+static void apply_task_binary_op2(const ggml_compute_params * params, ggml_tensor * dst) {
     const ggml_tensor * src0 = dst->src[0];
     const ggml_tensor * src1 = dst->src[1];
 
@@ -176,8 +283,9 @@ static void binary_op(const ggml_compute_params * params, ggml_tensor * dst) {
     // f32
 
     /*  */ if (src0->type == GGML_TYPE_F32  && src1->type == GGML_TYPE_F32  && dst->type == GGML_TYPE_F32) { // all f32
-        // printf("it's mygo\n"); 走这里
-        apply_binary_op<op, float, float, float>(params, dst);
+        // printf("it's mygo\n"); //走这里
+        // apply_binary_op<op, float, float, float>(params, dst);
+        apply_task_binary_op<op, float, float, float>(params, dst);
     } else if (src0->type == GGML_TYPE_F16  && src1->type == GGML_TYPE_F16  && dst->type == GGML_TYPE_F16) { // all f16
         // printf("it's mygo2\n");
         apply_binary_op<op, ggml_fp16_t, ggml_fp16_t, ggml_fp16_t>(params, dst);
@@ -204,6 +312,7 @@ static void binary_op(const ggml_compute_params * params, ggml_tensor * dst) {
 
 void ggml_compute_forward_add_non_quantized(const ggml_compute_params * params, ggml_tensor * dst) {
     binary_op<op_add>(params, dst);
+    // apply_task_binary_op<op_add>(params, dst);
 }
 
 void ggml_compute_forward_sub(const ggml_compute_params * params, ggml_tensor * dst) {
@@ -211,6 +320,7 @@ void ggml_compute_forward_sub(const ggml_compute_params * params, ggml_tensor * 
 }
 
 void ggml_compute_forward_mul(const ggml_compute_params * params, ggml_tensor * dst) {
+    printf("ggml_compute_forward_mul: dst: %s, src0: %s, src1: %s\n", ggml_type_name(dst->type), ggml_type_name(dst->src[0]->type), ggml_type_name(dst->src[1]->type));
     binary_op<op_mul>(params, dst);
 }
 

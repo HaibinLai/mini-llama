@@ -2302,6 +2302,7 @@ static void ggml_compute_haibin_forward(struct ggml_compute_params * params, str
             { 
                 // ggml_compute_forward_cpy(params, tensor);
                 ggml_compute_task_forward_dup(params, tensor);
+                // ggml_compute_task_forward_dup_f32(params, tensor);
             } break;
         case GGML_OP_CONT:
             { 

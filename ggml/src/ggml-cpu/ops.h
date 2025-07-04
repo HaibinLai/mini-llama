@@ -56,6 +56,10 @@ void ggml_compute_forward_out_prod(const struct ggml_compute_params * params, st
 void ggml_compute_forward_scale(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_set(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_cpy(const struct ggml_compute_params * params, struct ggml_tensor * dst);
+//  void ggml_compute_task_forward_dup_f32(
+//         const struct ggml_compute_params * params,
+//        struct ggml_tensor * dst);
+
 void ggml_compute_forward_cont(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_reshape(const struct ggml_compute_params * params, struct ggml_tensor * dst);
 void ggml_compute_forward_view(const struct ggml_compute_params * params, struct ggml_tensor * dst);

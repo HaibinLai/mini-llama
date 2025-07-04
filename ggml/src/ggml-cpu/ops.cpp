@@ -691,6 +691,8 @@ static void ggml_compute_forward_dup_f32(
     if (src0->type == dst->type &&
         ne00 == ne0 &&
         nb00 == ggml_type_size(src0->type) && nb0 == ggml_type_size(dst->type)) {
+
+        printf("AAAA %s: src0->type == dst->type && ne00 == ne0 && nb00 == nb0\n", __func__);
         // copy by rows
         const size_t rs = ne00*nb00;
         for (int64_t i03 = 0; i03 < ne03; i03++) {
@@ -707,9 +709,12 @@ static void ggml_compute_forward_dup_f32(
     }
 
     if (ggml_is_contiguous(dst)) {
+        printf("BBBB %s: dst is contiguous\n", __func__);
         // TODO: simplify
         if (nb00 == sizeof(float)) {
+            printf("CCCC %s: dst->type == GGML_TYPE_F32\n", __func__);
             if (dst->type == GGML_TYPE_F32) {
+                printf("CCDD %s: dst->type == GGML_TYPE_F32\n", __func__);
                 size_t id = 0;
                 const size_t rs = ne00 * nb00;
                 char * dst_ptr = (char *) dst->data;
@@ -726,6 +731,7 @@ static void ggml_compute_forward_dup_f32(
                     }
                 }
             } else if (ggml_get_type_traits_cpu(dst->type)->from_float) {
+                printf("DDCC %s: dst->type == GGML_TYPE_F16 or GGML_TYPE_BF16\n", __func__);
                 ggml_from_float_t const quantize_row_q = ggml_get_type_traits_cpu(dst->type)->from_float;
 
                 size_t id = 0;
@@ -750,6 +756,7 @@ static void ggml_compute_forward_dup_f32(
             //printf("%s: this is not optimal - fix me\n", __func__);
 
             if (dst->type == GGML_TYPE_F32) {
+                printf("DDDD %s: dst->type == GGML_TYPE_F32\n", __func__);
                 size_t id = 0;
                 float * dst_ptr = (float *) dst->data;
 
@@ -768,6 +775,7 @@ static void ggml_compute_forward_dup_f32(
                     }
                 }
             } else if (dst->type == GGML_TYPE_F16) {
+                printf("EEEE %s: dst->type == GGML_TYPE_F16\n", __func__);
                 size_t id = 0;
                 ggml_fp16_t * dst_ptr = (ggml_fp16_t *) dst->data;
 
@@ -786,6 +794,7 @@ static void ggml_compute_forward_dup_f32(
                     }
                 }
             } else if (dst->type == GGML_TYPE_BF16) {
+                printf("FFFF %s: dst->type == GGML_TYPE_BF16\n", __func__);
                 size_t id = 0;
                 ggml_bf16_t * dst_ptr = (ggml_bf16_t *) dst->data;
 
@@ -979,6 +988,69 @@ static void ggml_compute_forward_dup_f32(
     }
 }
 
+
+
+static void ggml_compute_task_forward_dup_f32(
+        const ggml_compute_params * params,
+        ggml_tensor * dst) {
+
+    const ggml_tensor * src0 = dst->src[0];
+
+    GGML_ASSERT(ggml_nelements(dst) == ggml_nelements(src0));
+    GGML_TENSOR_UNARY_OP_LOCALS
+
+    ggml_from_float_t const quantize_row_q = ggml_get_type_traits_cpu(dst->type)->from_float;
+
+    size_t rs = nb0 * (ne00 / ggml_blck_size(dst->type));
+    char * dst_ptr = (char *) dst->data;
+
+    const int nr = ne01;
+    const int ith = params->ith;
+    const int nth = params->nth;
+    const int dr = nr;
+    const int ir0 = 0;
+    const int ir1 =  nr;
+
+    tf::Taskflow taskflow;
+    tf::Executor executor(params->nth);
+
+    for (int i03 = 0; i03 < ne03; ++i03) {
+        for (int i02 = 0; i02 < ne02; ++i02) {
+            for (int i01 = ir0; i01 < ir1; ++i01) {
+                taskflow.emplace([=]() {
+                    const float * src0_ptr = (float *)((char *) src0->data + i01 * nb01 + i02 * nb02 + i03 * nb03);
+                    size_t id = rs * (i01 + i02 * ne01 + i03 * ne01 * ne02); // adjusted from nested id
+                    quantize_row_q(src0_ptr, dst_ptr + id, ne00);
+                });
+            }
+        }
+    }
+
+    // rdtscp time
+    uint64_t start = rdtscp();
+
+    executor.run(taskflow).wait();
+
+    uint64_t end = rdtscp();
+    double time = (end - start) /  3e3;
+    printf("task_forward_dup_f32: time = %.3f us\n", time);
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // A simplified version of ggml_compute_forward_dup that doesn't do float upcasting, and just plain old memcpy.
 static void ggml_compute_forward_dup_bytes(
         const ggml_compute_params * params,
@@ -1142,19 +1214,42 @@ static void ggml_compute_forward_dup_bytes(
 static void ggml_compute_task_forward_dup_bytes(
         const ggml_compute_params * params,
         ggml_tensor * dst) {
+
     const ggml_tensor * src0 = dst->src[0];
 
     GGML_ASSERT(ggml_nelements(dst) == ggml_nelements(src0));
+    GGML_ASSERT(ggml_is_contiguous(dst) && ggml_is_contiguous(src0));
     GGML_ASSERT(src0->type == dst->type);
 
-    GGML_TENSOR_UNARY_OP_LOCALS;
+    const size_t nb0 = ggml_type_size(src0->type);
 
-    if (ggml_is_contiguous(src0) && ggml_is_contiguous(dst)) {
-        printf("1144 %s: src0 and dst are contiguous, using memcpy\n", __func__);
-        // here
-        ggml_compute_forward_dup_same_cont(params, dst);
-        return;
+    const int64_t n_elem = ggml_nelements(src0);
+    const int64_t blck_size = ggml_blck_size(src0->type);
+    const int64_t nk = n_elem / blck_size;
+
+    const int64_t nthreads = params->nth;
+    const int64_t chunk_size = (nk + nthreads - 1) / nthreads;
+
+    tf::Taskflow taskflow;
+    tf::Executor executor;
+
+    for (int64_t i = 0; i < nthreads; ++i) {
+        const int64_t k0 = i * chunk_size;
+        const int64_t k1 = std::min(k0 + chunk_size, nk);
+
+        if (k0 >= k1) continue; // skip empty range
+
+        taskflow.emplace([=]() {
+            memcpy(
+                ((char *) dst->data  + k0 * nb0),
+                ((char *) src0->data + k0 * nb0),
+                (k1 - k0) * nb0
+            );
+        });
     }
+
+    executor.run(taskflow).wait();
+    // }
 
 
 
@@ -1251,6 +1346,7 @@ void ggml_compute_forward_dup(
             {
                 printf("F32\n" );
                 ggml_compute_forward_dup_f32(params, dst);
+                // ggml_compute_task_forward_dup_f32(params, dst);
             } break;
         default:
             {
@@ -1273,7 +1369,8 @@ void ggml_compute_task_forward_dup(
 
     if (src0->type == dst->type) {
         printf("src0->type == dst->type\n");
-        ggml_compute_forward_dup_bytes(params, dst);
+        // ggml_compute_forward_dup_bytes(params, dst);
+        ggml_compute_task_forward_dup_bytes(params, dst);
         return;
     }
 
@@ -1291,7 +1388,8 @@ void ggml_compute_task_forward_dup(
         case GGML_TYPE_F32:
             {// CPY
                 printf("F32\n" );
-                ggml_compute_forward_dup_f32(params, dst);
+                // ggml_compute_forward_dup_f32(params, dst);
+                ggml_compute_task_forward_dup_f32(params, dst);
             } break;
         default:
             {
@@ -1394,8 +1492,9 @@ void ggml_compute_forward_add(
         case GGML_TYPE_F16:
         case GGML_TYPE_BF16:
             {
+                printf("GGML_TYPE_F32/F16/BF16\n");
                 ggml_compute_forward_add_non_quantized(params, dst);
-                // GO TO NEW FUNC
+                // GO TO NEW FUNC here
             } break;
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
@@ -3007,6 +3106,69 @@ static void ggml_compute_forward_silu_f32(
     }
 }
 
+
+// static void ggml_compute_task_forward_silu_f32(
+//         const ggml_compute_params * params,
+//         ggml_tensor * dst) {
+
+//     const ggml_tensor * src0 = dst->src[0];
+
+//     assert(ggml_is_contiguous_1(src0));
+//     assert(ggml_is_contiguous_1(dst));
+//     assert(ggml_are_same_shape(src0, dst));
+
+//     const int ith = params->ith;
+//     const int nth = params->nth;
+
+//     const int nc = src0->ne[0];
+//     const int nr = ggml_nrows(src0);
+
+//     // rows per thread
+//     const int dr = (nr + nth - 1)/nth;
+
+//     // row range for this thread
+//     const int ir0 = dr*ith;
+//     const int ir1 = MIN(ir0 + dr, nr);
+
+//     for (int i1 = ir0; i1 < ir1; i1++) {
+//         ggml_vec_silu_f32(nc,
+//                 (float *) ((char *) dst->data  + i1*( dst->nb[1])),
+//                 (float *) ((char *) src0->data + i1*(src0->nb[1])));
+//     }
+// }
+
+#include <taskflow/taskflow.hpp>  // 确保你已经包含 Taskflow
+
+void ggml_compute_task_forward_silu_f32(
+    const ggml_compute_params * params,
+    ggml_tensor * dst
+    ) {
+
+    const ggml_tensor * src0 = dst->src[0];
+
+    assert(ggml_is_contiguous_1(src0));
+    assert(ggml_is_contiguous_1(dst));
+    assert(ggml_are_same_shape(src0, dst));
+
+    const int nc = src0->ne[0];             // 每行元素数量
+    const int nr = ggml_nrows(src0);        // 总共多少行
+    tf::Executor executor;
+    tf::Taskflow flow;
+
+    for (int i1 = 0; i1 < nr; ++i1) {
+        flow.emplace([=]() {
+            ggml_vec_silu_f32(
+                nc,
+                (float *)((char *) dst->data  + i1 * dst->nb[1]),
+                (float *)((char *) src0->data + i1 * src0->nb[1])
+            );
+        });
+    }
+
+    executor.run(flow).wait();
+}
+
+
 static void ggml_compute_forward_silu_f16(
     const ggml_compute_params * params,
     ggml_tensor * dst) {
@@ -3024,7 +3186,8 @@ static void ggml_compute_forward_silu(
             {
                 // here
                 // printf("ggml_compute_forward_silu_f32\n");
-                ggml_compute_forward_silu_f32(params, dst);
+                // ggml_compute_forward_silu_f32(params, dst);
+                ggml_compute_task_forward_silu_f32(params, dst);
             } break;
         // case GGML_TYPE_F16:
         //     {
@@ -3269,9 +3432,9 @@ static void ggml_compute_forward_rms_norm_f32(
     
     uint64_t end = rdtscp();
     // std::cout << "Fork-join execution took " << (end - start) << " cycles\n";
-    double seconds = (end - start) / 3e9;
+    double seconds = (end - start) / 3e3;
     if(params->ith == 0) {
-        std::cout << "Fork-join took " << seconds * 1e6 << " us\n";
+        std::cout << "Fork-join took " << seconds  << " us\n";
     }
     
 }
@@ -8468,6 +8631,12 @@ void ggml_compute_forward_unary(
 
     const ggml_unary_op op = ggml_get_unary_op(dst);
 
+    // print op
+    // if (params->ith == 0) {
+    //     printf("ggml_compute_forward_unary: %d\n", (int)(op));
+    //     // printf("ggml_compute_forward_unary: %s\n", ggml_unary_op_to_string(op));
+    // }
+
     switch (op) {
         case GGML_UNARY_OP_ABS:
             {
@@ -8515,6 +8684,7 @@ void ggml_compute_forward_unary(
             } break;
         case GGML_UNARY_OP_SILU:
             {
+                printf("SILU\n");
                 ggml_compute_forward_silu(params, dst);
             } break;
         case GGML_UNARY_OP_HARDSWISH:
