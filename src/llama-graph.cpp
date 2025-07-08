@@ -399,6 +399,8 @@ llm_graph_context::llm_graph_context(const llm_graph_params & params) :
     res              (std::make_unique<llm_graph_result>()) {
     }
 
+    // 是一个常量成员函数，用于调用回调函数 cb_func（如果存在）。它接受三个参数：
+    // 指向 ggml_tensor 的指针 cur、名称字符串 name 和整数 il，并将这些参数传递给 cb_func 以执行具体的操作。
 void llm_graph_context::cb(ggml_tensor * cur, const char * name, int il) const {
     if (cb_func) {
         cb_func(ubatch, cur, name, il);
@@ -408,12 +410,14 @@ void llm_graph_context::cb(ggml_tensor * cur, const char * name, int il) const {
 ggml_tensor * llm_graph_context::build_cvec(
          ggml_tensor * cur,
                  int   il) const {
+    printf("llm_graph_context::build_cvec: =\n");
     return cvec->apply_to(ctx0, cur, il);
 }
 
 ggml_tensor * llm_graph_context::build_lora_mm(
           ggml_tensor * w,
           ggml_tensor * cur) const {
+    printf("llm_graph_context::build_lora_mm:554545\n");
     ggml_tensor * res = ggml_mul_mat(ctx0, w, cur);
 
     for (const auto & lora : *loras) {
@@ -441,6 +445,8 @@ ggml_tensor * llm_graph_context::build_lora_mm_id(
           ggml_tensor * w,   // ggml_tensor * as
           ggml_tensor * cur, // ggml_tensor * b
           ggml_tensor * ids) const {
+
+    printf("llm_graph_context::build_lora_mm_id 3: \n");
     ggml_tensor * res = ggml_mul_mat_id(ctx0, w, cur, ids);
     for (const auto & lora : *loras) {
         llama_adapter_lora_weight * lw = lora.first->get_weight(w);
@@ -471,6 +477,7 @@ ggml_tensor * llm_graph_context::build_norm(
          ggml_tensor * mb,
        llm_norm_type   type,
                  int   il) const {
+    printf("llm_graph_context::build_norm2\n");
     switch (type) {
         case LLM_NORM:       cur = ggml_norm    (ctx0, cur, hparams.f_norm_eps);     break;
         case LLM_NORM_RMS:   cur = ggml_rms_norm(ctx0, cur, hparams.f_norm_rms_eps); break;
@@ -483,7 +490,7 @@ ggml_tensor * llm_graph_context::build_norm(
     }
 
     if (mw || mb) {
-        cb(cur, "norm", il);
+        cb(cur, "norm", il); // Log the normalization operation
     }
 
     if (mw) {
@@ -515,6 +522,8 @@ ggml_tensor * llm_graph_context::build_ffn(
      llm_ffn_op_type   type_op,
    llm_ffn_gate_type   type_gate,
                  int   il) const {
+
+    printf("llm_graph_context::build_ffn: \n" );
     ggml_tensor * tmp = up ? build_lora_mm(up, cur) : cur;
     cb(tmp, "ffn_up", il);
 
@@ -658,6 +667,9 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
                float   w_scale,
          llama_expert_gating_func_type gating_op,
                  int   il) const {
+    // printf("llm_graph_context::build_moe_ffn: %s\n", cur->name.c_str());
+    printf("MoE ffn\n");
+
     const int64_t n_embd   = cur->ne[0];
     const int64_t n_tokens = cur->ne[1];
     const bool weight_before_ffn = arch == LLM_ARCH_LLAMA4; // for llama4, we apply the sigmoid-ed weights before the FFN
@@ -792,6 +804,10 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
 
 // input embeddings with optional lora
 ggml_tensor * llm_graph_context::build_inp_embd(ggml_tensor * tok_embd) const {
+    // printf("llm_graph_context::build_inp_embd: %s\n", tok_embd->name.c_str());
+
+    printf("llm_graph_context::build_inp_embd\n");
+
     const int64_t n_embd = hparams.n_embd;
 
     auto inp = std::make_unique<llm_graph_input_embd>();
@@ -843,6 +859,7 @@ ggml_tensor * llm_graph_context::build_inp_embd(ggml_tensor * tok_embd) const {
 }
 
 ggml_tensor * llm_graph_context::build_inp_pos() const {
+    printf("llm_graph_context::build_inp_pos\n");
     auto inp = std::make_unique<llm_graph_input_pos>(hparams.n_pos_per_embd());
 
     auto & cur = inp->pos;
@@ -856,6 +873,7 @@ ggml_tensor * llm_graph_context::build_inp_pos() const {
 }
 
 ggml_tensor * llm_graph_context::build_inp_attn_scale() const {
+    printf("llm_graph_context::build_inp_attn_scale\n");
     auto inp = std::make_unique<llm_graph_input_attn_temp>(hparams.n_attn_temp_floor_scale, hparams.f_attn_temp_scale);
 
     auto & cur = inp->attn_scale;
@@ -870,6 +888,7 @@ ggml_tensor * llm_graph_context::build_inp_attn_scale() const {
 }
 
 ggml_tensor * llm_graph_context::build_inp_out_ids() const {
+    printf("llm_graph_context::build_inp_out_ids\n");
     // note: when all tokens are output, we could skip this optimization to spare the ggml_get_rows() calls,
     //       but this would make the graph topology depend on the number of output tokens, which can interere with
     //       features that require constant topology such as pipline parallelism
@@ -891,6 +910,7 @@ ggml_tensor * llm_graph_context::build_inp_out_ids() const {
 }
 
 ggml_tensor * llm_graph_context::build_inp_mean() const {
+    printf("llm_graph_context::build_inp_mean\n");
     auto inp = std::make_unique<llm_graph_input_mean>(cparams);
 
     auto & cur = inp->mean;
@@ -904,6 +924,7 @@ ggml_tensor * llm_graph_context::build_inp_mean() const {
 }
 
 ggml_tensor * llm_graph_context::build_inp_cls() const {
+    printf("llm_graph_context::build_inp_cls\n");
     auto inp = std::make_unique<llm_graph_input_cls>(cparams);
 
     auto & cur = inp->cls;
@@ -917,6 +938,7 @@ ggml_tensor * llm_graph_context::build_inp_cls() const {
 }
 
 ggml_tensor * llm_graph_context::build_inp_cross_embd() const {
+    printf("llm_graph_context::build_inp_cross_embd\n");
     auto inp = std::make_unique<llm_graph_input_cross_embd>(cross);
 
     auto & cur = inp->cross_embd;
@@ -941,6 +963,7 @@ ggml_tensor * llm_graph_context::build_inp_cross_embd() const {
 }
 
 ggml_tensor * llm_graph_context::build_inp_pos_bucket_enc() const {
+    printf("llm_graph_context::build_inp_pos_bucket_enc\n");
     auto inp = std::make_unique<llm_graph_input_pos_bucket>(hparams);
 
     auto & cur = inp->pos_bucket;
@@ -954,6 +977,7 @@ ggml_tensor * llm_graph_context::build_inp_pos_bucket_enc() const {
 }
 
 ggml_tensor * llm_graph_context::build_inp_pos_bucket_dec() const {
+    printf("llm_graph_context::build_inp_pos_bucket_dec\n");
     const auto * mctx_cur = static_cast<const llama_kv_cache_unified_context *>(mctx);
 
     auto inp = std::make_unique<llm_graph_input_pos_bucket_kv>(hparams, mctx_cur);
@@ -971,6 +995,9 @@ ggml_tensor * llm_graph_context::build_inp_pos_bucket_dec() const {
 }
 
 ggml_tensor * llm_graph_context::build_pos_bias(ggml_tensor * pos_bucket, ggml_tensor * attn_rel_b) const {
+    // printf("llm_graph_context::build_pos_bias: %s\n", pos_bucket->name.c_str());
+    printf("pos - bias \n");
+    
     ggml_tensor * pos_bucket_1d = ggml_reshape_1d(ctx0, pos_bucket, pos_bucket->ne[0] * pos_bucket->ne[1]);
     cb(pos_bucket_1d, "pos_bucket_1d", -1);
 
@@ -986,6 +1013,7 @@ ggml_tensor * llm_graph_context::build_pos_bias(ggml_tensor * pos_bucket, ggml_t
 }
 
 llm_graph_input_mem_hybrid * llm_graph_context::build_inp_mem_hybrid() const {
+    printf("llm_graph_context::build_inp_mem_hybrid\n");
     const auto * mctx_cur = static_cast<const llama_memory_hybrid_context *>(mctx);
 
     auto inp = std::make_unique<llm_graph_input_mem_hybrid>(hparams, cparams, mctx_cur);
@@ -1021,8 +1049,13 @@ ggml_tensor * llm_graph_context::build_attn_mha(
          ggml_tensor * kq_mask,
          ggml_tensor * v_mla,
              float     kq_scale) const {
+    printf("build mhd \n");
+    // printf("llm_graph_context::build_attn_mha: %s, %s, %s\n", q->name.c_str(), k->name.c_str(), v->name.c_str());
     const bool v_trans = v->nb[1] > v->nb[2];
 
+
+    // GGML 是一个“静态图 + lazy eval”的推理框架，所有算子的布局、
+    // 形状、stride（包括 permute / transpose / reshape / cast 等）都是在构建阶段 —— 比如你这里的 build_attn_mha() 函数 —— 就设置好的。
     q = ggml_permute(ctx0, q, 0, 2, 1, 3);
     k = ggml_permute(ctx0, k, 0, 2, 1, 3);
     v = ggml_permute(ctx0, v, 0, 2, 1, 3);
@@ -1035,60 +1068,56 @@ ggml_tensor * llm_graph_context::build_attn_mha(
 
     // TODO: replace hardcoded padding with ggml-provided padding
     if (cparams.flash_attn && (n_kv % 256 == 0) && kq_b == nullptr) {
-        GGML_ASSERT(kq_b == nullptr && "Flash attention does not support KQ bias yet");
+        // printf("Using flash attention\n");
+        // GGML_ASSERT(kq_b == nullptr && "Flash attention does not support KQ bias yet");
 
-        if (v_trans) {
-            v = ggml_transpose(ctx0, v);
-        }
+        // if (v_trans) {
+        //     v = ggml_transpose(ctx0, v);
+        // }
 
-        // this can happen when KV cache is not used (e.g. an embedding model with non-causal attn)
-        if (k->type == GGML_TYPE_F32) {
-            k = ggml_cast(ctx0, k, GGML_TYPE_F16);
-        }
+        // // this can happen when KV cache is not used (e.g. an embedding model with non-causal attn)
+        // if (k->type == GGML_TYPE_F32) {
+        //     k = ggml_cast(ctx0, k, GGML_TYPE_F16);
+        // }
 
-        if (v->type == GGML_TYPE_F32) {
-            v = ggml_cast(ctx0, v, GGML_TYPE_F16);
-        }
+        // if (v->type == GGML_TYPE_F32) {
+        //     v = ggml_cast(ctx0, v, GGML_TYPE_F16);
+        // }
 
-        cur = ggml_flash_attn_ext(ctx0, q, k, v, kq_mask, kq_scale, hparams.f_max_alibi_bias,
-                                  hparams.attn_soft_cap ? hparams.f_attn_logit_softcapping : 0.0f);
+        // cur = ggml_flash_attn_ext(ctx0, q, k, v, kq_mask, kq_scale, hparams.f_max_alibi_bias,
+        //                           hparams.attn_soft_cap ? hparams.f_attn_logit_softcapping : 0.0f);
 
-        ggml_flash_attn_ext_set_prec(cur, GGML_PREC_F32);
+        // ggml_flash_attn_ext_set_prec(cur, GGML_PREC_F32);
 
-        if (v_mla) {
-#if 0
-            // v_mla can be applied as a matrix-vector multiplication with broadcasting across dimension 3 == n_tokens.
-            // However, the code is optimized for dimensions 0 and 1 being large, so this is ineffient.
-            cur = ggml_reshape_4d(ctx0, cur, v_mla->ne[0], 1, n_head, n_tokens);
-            cur = ggml_mul_mat(ctx0, v_mla, cur);
-#else
-            // It's preferable to do the calculation as a matrix-matrix multiplication with n_tokens in dimension 1.
-            // The permutations are noops and only change how the tensor data is interpreted.
-            cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
-            cur = ggml_mul_mat(ctx0, v_mla, cur);
-            cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
-            cur = ggml_cont(ctx0, cur); // Needed because ggml_reshape_2d expects contiguous inputs.
-#endif
-        }
+        // if (v_mla) {
+        //     printf("Using MLA with absorption optimization in flash attention\n");
+        //     // It's preferable to do the calculation as a matrix-matrix multiplication with n_tokens in dimension 1.
+        //     // The permutations are noops and only change how the tensor data is interpreted.
+        //     cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
+        //     cur = ggml_mul_mat(ctx0, v_mla, cur);
+        //     cur = ggml_permute(ctx0, cur, 0, 2, 1, 3);
+        //     cur = ggml_cont(ctx0, cur); // Needed because ggml_reshape_2d expects contiguous inputs.
+        // }
 
-        cur = ggml_reshape_2d(ctx0, cur, cur->ne[0]*n_head, n_tokens);
+        // cur = ggml_reshape_2d(ctx0, cur, cur->ne[0]*n_head, n_tokens);
     } else {
+        printf("Using standard attention\n");
         ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
 
         // note: this op tends to require high floating point range
         //       while for some models F16 is enough, for others it is not, so we default to F32 here
         ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
 
-        if (arch == LLM_ARCH_GROK) {
-            // need to do the following:
-            // multiply by attn_output_multiplyer of 0.08838834764831845
-            // and then :
-            // kq = 30 * tanh(kq / 30)
-            // before the softmax below
+        // if (arch == LLM_ARCH_GROK) {
+        //     // need to do the following:
+        //     // multiply by attn_output_multiplyer of 0.08838834764831845
+        //     // and then :
+        //     // kq = 30 * tanh(kq / 30)
+        //     // before the softmax below
 
-            kq = ggml_tanh(ctx0, ggml_scale(ctx0, kq, 0.08838834764831845f/30.0f));
-            kq = ggml_scale(ctx0, kq, 30);
-        }
+        //     kq = ggml_tanh(ctx0, ggml_scale(ctx0, kq, 0.08838834764831845f/30.0f));
+        //     kq = ggml_scale(ctx0, kq, 30);
+        // }
 
         if (hparams.attn_soft_cap) {
             kq = ggml_scale(ctx0, kq, 1.0f / hparams.f_attn_logit_softcapping);
@@ -1130,6 +1159,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
 }
 
 llm_graph_input_attn_no_cache * llm_graph_context::build_attn_inp_no_cache() const {
+    printf("llm_graph_context::build_attn_inp_no_cache\n");
     auto inp = std::make_unique<llm_graph_input_attn_no_cache>(hparams, cparams);
 
     // note: there is no KV cache, so the number of KV values is equal to the number of tokens in the batch
@@ -1154,6 +1184,8 @@ ggml_tensor * llm_graph_context::build_attn(
         ggml_tensor * v_mla,
             float     kq_scale,
             int       il) const {
+    // printf("llm_graph_context::build_attn: %s, %s, %s\n", q_cur->name.c_str(), k_cur->name.c_str(), v_cur->name.c_str());
+    printf("llm_graph_context::build_attn: %d tokens\n", n_tokens);
     GGML_UNUSED(n_tokens);
 
     // these nodes are added to the graph together so that they are not reordered
@@ -1187,6 +1219,7 @@ ggml_tensor * llm_graph_context::build_attn(
 }
 
 llm_graph_input_attn_kv_unified * llm_graph_context::build_attn_inp_kv_unified() const {
+    printf("llm_graph_context::build_attn_inp_kv_unified\n");
     const auto * mctx_cur = static_cast<const llama_kv_cache_unified_context *>(mctx);
 
     auto inp = std::make_unique<llm_graph_input_attn_kv_unified>(hparams, cparams, mctx_cur);
@@ -1218,6 +1251,8 @@ ggml_tensor * llm_graph_context::build_attn(
         ggml_tensor * v_mla,
             float     kq_scale,
             int       il) const {
+
+    printf("llm_graph_context::build_attn:3\n");
     // these nodes are added to the graph together so that they are not reordered
     // by doing so, the number of splits in the graph is reduced
     ggml_build_forward_expand(gf, q_cur);
@@ -1268,6 +1303,8 @@ ggml_tensor * llm_graph_context::build_attn(
         ggml_tensor * v_mla,
             float     kq_scale,
             int       il) const {
+    printf("llm_graph_context::build_attn:4\n");
+    // printf("llm_graph_context::build_attn: %s, %s, %s\n", q_cur->name.c_str(), k_cur->name.c_str(), v_cur->name.c_str());
     // these nodes are added to the graph together so that they are not reordered
     // by doing so, the number of splits in the graph is reduced
     ggml_build_forward_expand(gf, q_cur);
@@ -1311,6 +1348,7 @@ ggml_tensor * llm_graph_context::build_attn(
 }
 
 llm_graph_input_attn_cross * llm_graph_context::build_attn_inp_cross() const {
+    printf("llm_graph_context::build_attn_inp_cross\n");
     auto inp = std::make_unique<llm_graph_input_attn_cross>(cross);
 
     const int32_t n_enc = !cross->v_embd.empty() ? cross->n_enc : hparams.n_ctx_train;
@@ -1323,6 +1361,8 @@ llm_graph_input_attn_cross * llm_graph_context::build_attn_inp_cross() const {
     return (llm_graph_input_attn_cross *) res->add_input(std::move(inp));
 }
 
+// 用于构建注意力机制相关的张量操作。它接收多个输入张量和参数，
+// 通过扩展前向图、调用多头注意力函数以及可选的线性变换和偏置操作，最终返回处理后的张量结果
 ggml_tensor * llm_graph_context::build_attn(
         llm_graph_input_attn_cross * inp,
         ggml_cgraph * gf,
@@ -1335,18 +1375,24 @@ ggml_tensor * llm_graph_context::build_attn(
         ggml_tensor * v_mla,
             float     kq_scale,
             int       il) const {
+    // printf("llm_graph_context::build_attn: %s, %s, %s\n", q_cur->name.c_str(), k_cur->name.c_str(), v_cur->name.c_str());
+    // s
+    printf("llm_graph_context::build_attn 5555: %d tokens\n", n_tokens);
     // these nodes are added to the graph together so that they are not reordered
     // by doing so, the number of splits in the graph is reduced
+    //  将 Q、K、V 显式添加进计算图，确保它们不会被后续优化器重排序（这能减少计算图中的“断裂/split”，提升计算效率）。
     ggml_build_forward_expand(gf, q_cur);
     ggml_build_forward_expand(gf, k_cur);
     ggml_build_forward_expand(gf, v_cur);
 
+    // 从输入结构中提取 attention mask，用于遮挡某些 attention 分数。
     const auto & kq_mask = inp->get_kq_mask_cross();
 
     ggml_tensor * q = q_cur;
     ggml_tensor * k = k_cur;
     ggml_tensor * v = v_cur;
 
+    // 调用一个封装函数 build_attn_mha 构建多头注意力（Multi-head attention），使用 Q、K、V、bias、mask 和缩放。
     ggml_tensor * cur = build_attn_mha(gf, q, k, v, kq_b, kq_mask, v_mla, kq_scale);
     cb(cur, "kqv_out", il);
 
@@ -1361,6 +1407,7 @@ ggml_tensor * llm_graph_context::build_attn(
     if (wo_b) {
         cur = ggml_add(ctx0, cur, wo_b);
     }
+    // cur 是注意力模块的“当前结果”，随着线性映射、偏置加法等一步步变换，最后返回作为模块的最终输出。
 
     return cur;
 }
@@ -1377,6 +1424,10 @@ ggml_tensor * llm_graph_context::build_attn(
         ggml_tensor * v_mla,
             float     kq_scale,
             int       il) const {
+
+    // printf("llm_graph_context::build_attn: %s, %s, %s\n", q_cur->name.c_str(), k_cur->name.c_str(), v_cur->name.c_str());
+    printf("llm_graph_context::build_attn:6666 %d tokens\n", n_tokens);
+    
     // these nodes are added to the graph together so that they are not reordered
     // by doing so, the number of splits in the graph is reduced
     ggml_build_forward_expand(gf, q_cur);
@@ -1416,6 +1467,7 @@ ggml_tensor * llm_graph_context::build_attn(
 }
 
 llm_graph_input_attn_kv_unified_iswa * llm_graph_context::build_attn_inp_kv_unified_iswa() const {
+    printf("llm_graph_context::build_attn_inp_kv_unified_iswa\n");
     const auto * mctx_cur = static_cast<const llama_kv_cache_unified_iswa_context *>(mctx);
 
     auto inp = std::make_unique<llm_graph_input_attn_kv_unified_iswa>(hparams, cparams, mctx_cur);
@@ -1456,7 +1508,7 @@ ggml_tensor * llm_graph_context::build_rs(
            uint32_t   kv_size,
             int32_t   rs_zero,
                bool   avoid_copies) const {
-
+    printf("build rs!!\n");
     ggml_tensor * states = ggml_reshape_2d(ctx0, s, state_size, kv_size);
 
     // Clear a single state which will then be copied to the other cleared states.
@@ -1489,6 +1541,7 @@ ggml_tensor * llm_graph_context::build_rs(
 }
 
 llm_graph_input_rs * llm_graph_context::build_rs_inp() const {
+    printf("llm_graph_context::build_rs_inp\n");
     const auto * mctx_cur = static_cast<const llama_memory_recurrent_context *>(mctx);
 
     auto inp = std::make_unique<llm_graph_input_rs>(mctx_cur);
@@ -1508,6 +1561,7 @@ ggml_tensor * llm_graph_context::build_rs(
             int32_t   state_size,
             int32_t   n_seqs,
                bool   avoid_copies) const {
+    printf("build rs3 \n");
     const auto * mctx_cur = static_cast<const llama_memory_recurrent_context *>(mctx);
 
     return build_rs(gf, s, inp->s_copy, state_size, n_seqs, mctx_cur->get_n_rs(), mctx_cur->get_head(), mctx_cur->get_size(), mctx_cur->get_rs_z(), avoid_copies);
