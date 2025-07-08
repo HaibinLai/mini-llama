@@ -292,6 +292,20 @@ enum ggml_cgraph_eval_order {
     GGML_CGRAPH_EVAL_ORDER_COUNT
 };
 
+// #include <taskflow/taskflow.hpp>
+// #include "ggml-cpu/taskflow/taskflow.hpp"
+struct taskflow_taskgraph{
+        int size;    // maximum number of nodes/leafs/grads/grad_accs
+        int n_nodes; // number of nodes currently in use
+        int n_leafs; // number of leafs currently in use
+
+        // tf::Taskflow * tf; // taskflow object
+        // tf::Executor * executor; // executor object
+
+        enum ggml_cgraph_eval_order order;
+};
+
+// this is the key var that live in the whole life cycle
 struct ggml_cgraph {
     int size;    // maximum number of nodes/leafs/grads/grad_accs
     int n_nodes; // number of nodes currently in use
