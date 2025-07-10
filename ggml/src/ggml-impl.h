@@ -292,17 +292,19 @@ enum ggml_cgraph_eval_order {
     GGML_CGRAPH_EVAL_ORDER_COUNT
 };
 
+#include "taskflow-impl.h"
+
+
+
+
 // #include <taskflow/taskflow.hpp>
 // #include "ggml-cpu/taskflow/taskflow.hpp"
 struct taskflow_taskgraph{
         int size;    // maximum number of nodes/leafs/grads/grad_accs
         int n_nodes; // number of nodes currently in use
         int n_leafs; // number of leafs currently in use
-
-        // tf::Taskflow * tf; // taskflow object
-        // tf::Executor * executor; // executor object
-
         enum ggml_cgraph_eval_order order;
+        void *taskflow_graph; // taskflow graph object
 };
 
 // this is the key var that live in the whole life cycle
@@ -319,7 +321,29 @@ struct ggml_cgraph {
     struct ggml_hash_set visited_hash_set;
 
     enum ggml_cgraph_eval_order order;
+
+    struct taskflow_taskgraph taskflow; // taskflow object
+    
 };
+
+
+static void ggml_cgraph_build_taskflow(struct ggml_cgraph* cgraph) {
+    taskflow_graph_init(&cgraph->taskflow);
+
+    // 假设你遍历 nodes，加 task
+    for (int i = 0; i < cgraph->n_nodes; ++i) {
+        taskflow_graph_add_task(&cgraph->taskflow, cgraph->nodes[i]->name);
+    }
+}
+
+static void ggml_cgraph_run(struct ggml_cgraph* cgraph) {
+    taskflow_graph_run(&cgraph->taskflow);
+}
+
+static void ggml_cgraph_free(struct ggml_cgraph* cgraph) {
+    taskflow_graph_free(&cgraph->taskflow);
+}
+
 
 // returns a slice of cgraph with nodes [i0, i1)
 // the slice does not have leafs or gradients

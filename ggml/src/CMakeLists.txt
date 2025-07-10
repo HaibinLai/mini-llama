@@ -4,6 +4,9 @@ include("../cmake/common.cmake")
 # include_directories(${CMAKE_SOURCE_DIR}/src)
 include_directories(${CMAKE_SOURCE_DIR}/3rdParty)
 
+
+
+
 add_compile_definitions(GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
 
 # enable libstdc++ assertions for debug builds
@@ -270,6 +273,10 @@ function(ggml_add_backend backend)
     endif()
 endfunction()
 
+target_sources(ggml-base PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/taskflow-impl.cpp
+)
+
 function(ggml_add_cpu_backend_variant tag_name)
     set(GGML_CPU_TAG_NAME ${tag_name})
     # other: OPENMP LLAMAFILE CPU_HBM
@@ -379,9 +386,23 @@ ggml_add_backend(RPC)
 # ggml_add_backend(OpenCL)
 
 foreach (target ggml-base ggml)
-    target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
+    target_include_directories(${target} PUBLIC    
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> 
+        $<INSTALL_INTERFACE:include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/3rdParty>
+    )
     target_compile_features   (${target} PRIVATE c_std_11 cxx_std_17) # don't bump
 endforeach()
+
+# foreach (target ggml-base ggml)
+#     target_include_directories(${target} PUBLIC
+#         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+#         $<INSTALL_INTERFACE:include>
+#           # ✅ 加这行
+#     )
+#     target_compile_features(${target} PRIVATE c_std_11 cxx_std_17)
+# endforeach()
+
 
 target_link_libraries(ggml-base PRIVATE Threads::Threads)
 

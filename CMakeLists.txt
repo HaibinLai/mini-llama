@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target 
 project("llama.cpp" C CXX)
 include(CheckIncludeFileCXX)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdParty)
+# include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdParty)
 
 
 
