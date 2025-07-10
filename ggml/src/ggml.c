@@ -5759,6 +5759,7 @@ static void ggml_build_forward_impl(struct ggml_cgraph * cgraph, struct ggml_ten
 }
 
 void ggml_build_forward_expand(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
+    ggml_taskflow_hello(cgraph);
     ggml_build_forward_impl(cgraph, tensor, true);
 }
 

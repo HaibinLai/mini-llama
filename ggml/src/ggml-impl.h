@@ -300,6 +300,7 @@ enum ggml_cgraph_eval_order {
 // #include <taskflow/taskflow.hpp>
 // #include "ggml-cpu/taskflow/taskflow.hpp"
 struct taskflow_taskgraph{
+        int is_init; // 标记是否已初始化
         int size;    // maximum number of nodes/leafs/grads/grad_accs
         int n_nodes; // number of nodes currently in use
         int n_leafs; // number of leafs currently in use
@@ -336,11 +337,15 @@ static void ggml_cgraph_build_taskflow(struct ggml_cgraph* cgraph) {
     }
 }
 
-static void ggml_cgraph_run(struct ggml_cgraph* cgraph) {
+static void ggml_taskflow_hello(struct ggml_cgraph* cgraph) {
+    taskflow_graph_hello(&cgraph->taskflow);
+}
+
+static void ggml_taskflow_run(struct ggml_cgraph* cgraph) {
     taskflow_graph_run(&cgraph->taskflow);
 }
 
-static void ggml_cgraph_free(struct ggml_cgraph* cgraph) {
+static void ggml_taslflow_free(struct ggml_cgraph* cgraph) {
     taskflow_graph_free(&cgraph->taskflow);
 }
 

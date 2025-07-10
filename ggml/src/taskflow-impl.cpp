@@ -49,6 +49,7 @@
 
 // 自定义包装结构，用于隐藏 C++ 类型
 struct TaskflowWrapper {
+    
     tf::Taskflow flow;
     tf::Executor executor;
 
@@ -57,7 +58,17 @@ struct TaskflowWrapper {
 
 // 创建 taskflow graph
 extern "C" void taskflow_graph_init(struct taskflow_taskgraph* tg) {
+    if (tg->taskflow_graph != nullptr) {
+        // 如果已经初始化，直接返回
+        return;
+    }
+    if (tg->is_init == 1) {
+        // 如果已经初始化，直接返回
+        return;
+    }
+    
     tg->taskflow_graph = new TaskflowWrapper();
+    tg->is_init = 1;
 }
 
 // 添加 task：你也可以设计更通用的版本，比如传入 C 回调
@@ -78,4 +89,13 @@ extern "C" void taskflow_graph_run(struct taskflow_taskgraph* tg) {
 extern "C" void taskflow_graph_free(struct taskflow_taskgraph* tg) {
     delete static_cast<TaskflowWrapper*>(tg->taskflow_graph);
     tg->taskflow_graph = nullptr;
+}
+
+extern "C" void taskflow_graph_hello(struct taskflow_taskgraph* tg) {
+    taskflow_graph_init(tg);
+    auto* wrapper = static_cast<TaskflowWrapper*>(tg->taskflow_graph);
+    wrapper->flow.emplace([]() {
+        printf("Hello from Taskflow!\n");
+    });
+    printf("Hello Taskflow graph.\n");
 }

@@ -4,6 +4,8 @@
 #include "llama-batch.h"
 #include "llama-cparams.h"
 
+// #include "ggml-impl.h"  // for ggml_taskflow_hello
+
 #include "llama-kv-cache-unified.h"
 #include "llama-kv-cache-unified-iswa.h"
 #include "llama-memory-hybrid.h"
@@ -1239,6 +1241,7 @@ llm_graph_input_attn_kv_unified * llm_graph_context::build_attn_inp_kv_unified()
     return (llm_graph_input_attn_kv_unified *) res->add_input(std::move(inp));
 }
 
+// very important!!!
 ggml_tensor * llm_graph_context::build_attn(
         llm_graph_input_attn_kv_unified * inp,
         ggml_cgraph * gf,
@@ -1258,6 +1261,8 @@ ggml_tensor * llm_graph_context::build_attn(
     ggml_build_forward_expand(gf, q_cur);
     ggml_build_forward_expand(gf, k_cur);
     ggml_build_forward_expand(gf, v_cur);
+
+    // ggml_taskflow_hello(gf);
 
     const auto * mctx_cur = static_cast<const llama_kv_cache_unified_context *>(mctx);
 

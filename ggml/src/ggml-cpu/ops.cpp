@@ -1153,7 +1153,7 @@ static void ggml_compute_forward_dup_bytes(
     const int64_t nk00 = ne00 / ggml_blck_size(src0->type);
     const int64_t nk0  = ne0  / ggml_blck_size(dst->type);
 
-    printf("1147 %s: src0 type %s, dst type %s, nk00 %lld, nk0 %lld\n", __func__,
+    printf("1147 %s: src0 type %s, dst type %s, nk00 %ld, nk0 %ld\n", __func__,
            ggml_type_name(src0->type), ggml_type_name(dst->type), nk00, nk0);
 
     for (int64_t i03 = 0; i03 < ne03; i03++) {
@@ -3042,6 +3042,10 @@ static void ggml_compute_forward_gelu_quick_f32(
 static void ggml_compute_forward_gelu_quick_f16(
     const ggml_compute_params * params,
     ggml_tensor * dst) {
+    const ggml_tensor * src0 = dst->src[0];
+    assert(ggml_is_contiguous_1(src0));
+    assert(ggml_is_contiguous_1(dst));
+    assert(ggml_are_same_shape(src0, dst));
 }
 
 static void ggml_compute_forward_gelu_quick(
@@ -3688,6 +3692,9 @@ static void ggml_compute_forward_rms_norm_back_f32(
 void ggml_compute_forward_rms_norm_back(
         const ggml_compute_params * params,
         ggml_tensor * dst) {
+    const ggml_tensor * src0 = dst->src[0];
+    GGML_ASSERT(ggml_are_same_shape(src0, dst));
+    GGML_ASSERT(src0->nb[0] == sizeof(float));
 }
 
 // ggml_compute_forward_group_norm
@@ -5832,7 +5839,7 @@ static void ggml_compute_forward_rope_f32(
                 }
 
                 if (is_vision) {
-                    printf("ggml_compute_forward_rope_f32: go herer444 is_mrope = false, n_dims = %d, ne0 = %d\n", n_dims, ne0);
+                    printf("ggml_compute_forward_rope_f32: go herer444 is_mrope = false, n_dims = %d, ne0 = %ld\n", n_dims, ne0);
                     for (int64_t i0 = n_dims; i0 < ne0; i0 += 2) {
                         const int64_t ic = i0/2;
 
@@ -5849,7 +5856,7 @@ static void ggml_compute_forward_rope_f32(
                         dst_data[n_dims] = x0*sin_theta + x1*cos_theta;
                     }
                 } else {
-                    printf("ggml_compute_forward_rope_f32: go herer445 is_mrope = false, n_dims = %d, ne0 = %d\n", n_dims, ne0);
+                    printf("ggml_compute_forward_rope_f32: go herer445 is_mrope = false, n_dims = %d, ne0 = %ld\n", n_dims, ne0);
                     // fill the remain channels with data from src tensor
                     for (int64_t i0 = n_dims; i0 < ne0; i0 += 2) {
                         const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
@@ -5899,8 +5906,8 @@ static void ggml_compute_task_forward_rope_f32(
 
     GGML_ASSERT(nb00 == sizeof(float));
 
-    const int ith = 0;
-    const int nth = 1;
+    // const int ith = 0;
+    // const int nth = 1;
 
     const int nr = ggml_nrows(dst);
 
@@ -5948,7 +5955,7 @@ static void ggml_compute_task_forward_rope_f32(
 
     const int32_t * pos = (const int32_t *) src1->data;
 
-    printf("ggml_compute_forward_rope_f32: init n_dims = %d, ne0 = %d, ne1 = %d, ne2 = %d, ne3 = %d\n",
+    printf("ggml_compute_forward_rope_f32: init n_dims = %d, ne0 = %ld, ne1 = %ld, ne2 = %ld, ne3 = %ld\n",
             n_dims, ne0, ne1, ne2, ne3);
 
 tf::Taskflow rope_flow;
